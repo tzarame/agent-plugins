@@ -10,6 +10,12 @@ Plugins for AI agents, one folder per tool, since each has its own plugin format
 | `claude/plugins/unstoppable` | `/unstoppable:on`, `:off`, `:status`: off by default, per project. When on, a session idle for 5 minutes is woken with "Decide yourself. Maybe the code needs a review.", at most 3 times in a row; a message of the user resets the count. It takes effect at once |
 | `claude/install/install.sh` | the first step of setting up a machine: installs the GitHub CLI, logs in, then hands over to a private setup |
 
+First step on a new machine (downloads the script and makes it executable, since downloads come without the exec bit):
+
+```
+curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh && chmod +x install.sh && ./install.sh
+```
+
 Install the plugins (the marketplace is `tzarame`):
 
 ```
