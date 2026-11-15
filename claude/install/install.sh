@@ -13,7 +13,7 @@
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
-CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23liqBwNBSu6KAD2EA}   # the Client ID of the agents' GitHub App; not a secret
+CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
