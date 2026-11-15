@@ -1,0 +1,7 @@
+{
+  "description": "Wake an idle session after 5 minutes when the project's unstoppable mode is on",
+  "hooks": {
+    "Stop": [{"hooks": [{"type": "command", "command": "sh", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/idle-nudge.sh"], "asyncRewake": true, "timeout": 900}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "sh", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/idle-nudge.sh"], "timeout": 10}]}]
+  }
+}

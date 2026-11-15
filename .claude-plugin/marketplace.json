@@ -1,0 +1,19 @@
+{
+ "name": "tzarame",
+ "description": "Plugins for AI agents; the Claude Code ones are in claude/plugins.",
+ "owner": {
+  "name": "tzarame"
+ },
+ "plugins": [
+  {
+   "name": "auditor",
+   "source": "./claude/plugins/auditor",
+   "description": "Audit a project area by area with a strong model; each problem becomes a GitHub issue."
+  },
+  {
+   "name": "unstoppable",
+   "source": "./claude/plugins/unstoppable",
+   "description": "Wake an idle session after 5 minutes so it decides and goes on; off by default, per project."
+  }
+ ]
+}
