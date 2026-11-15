@@ -2,17 +2,18 @@
 # install.sh - the public first step of setting up a machine for a Claude Code agent.
 # It installs the GitHub CLI in ~/.local/bin (no sudo), clones the owner's private setup and runs it
 # with the same options. Nothing private is in this file.
-# The clone signs in to the owner's GitHub App of the setup, which can only read the setup
-# repository: the script prints a code and a link; open the link, enter the code, allow the App.
-# The token can read only what both the App and the person may read, so only members with access
-# to the setup get it. The token stays on this machine only (~/.config/ai-tools/git-credentials,
-# mode 600) for later pulls. Without a Client ID set, it logs in to GitHub instead (gh auth login).
+# The clone signs in to the agents' GitHub App, the one App for the setup and the projects: the
+# script prints a code and a link; open the link, enter the code, allow the App. The token reaches
+# only the repositories the App is installed on, and no more than the person may do there. It stays
+# on this machine only (~/.config/ai-tools/git-credentials, mode 600): later pulls use it, and the
+# setup gives it to gh for the agent's work, so one code is enough. Without a Client ID set, it logs
+# in to GitHub instead (gh auth login).
 #
 #   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
-CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the App ai-tools-setup; not a secret
+CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
