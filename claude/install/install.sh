@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# install.sh - the one script the user runs; saved as ~/start.sh on the first run (ai-tools bootstrap).
-# It never changes on the machine. Each run: git and the GitHub CLI if missing (no root), the
-# sign-in to the agents' GitHub App if not done, then the latest private part (zog88/ai-tools,
-# pulled to ~/.ai-tools), which it runs with the same options: packages, Claude, Tailscale, the
-# project and its session. Nothing private is in this file.
+# install.sh - prepares the machine; run it once, and again to update. It does not start a session.
+# Each run: git and the GitHub CLI if missing (no root), the sign-in to the agents' GitHub App if
+# not done, then the latest private part (zog88/ai-tools, pulled to ~/.ai-tools), which sets up:
+# packages, Claude, Tailscale, the project. Then it writes ~/start.sh, the command that starts
+# the project's session. Nothing private is in this file.
 # The sign-in prints a code and a link; open the link, enter the code, allow the App. The token
 # reaches only the repositories the App is installed on, and no more than the person may do there.
 # It stays on this machine only (~/.config/ai-tools/git-credentials, mode 600). Without a Client ID
@@ -12,17 +12,12 @@
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
 #               less install.sh      # read what runs
 #               bash install.sh
-#   then:       ~/start.sh [PROJECT] [options]
+#   then:       ~/start.sh [PROJECT] [options]     starts (or restarts) the session
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
 CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
-SELF_URL=https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh
-# the first run: keep this script as ~/start.sh, the only file the user runs from now on
-if ! grep -q '(ai-tools bootstrap)' "$HOME/start.sh" 2>/dev/null; then
-  curl -fsSL "$SELF_URL" -o "$HOME/start.sh.new" && chmod +x "$HOME/start.sh.new" && mv "$HOME/start.sh.new" "$HOME/start.sh" && echo "saved as ~/start.sh: run it from now on"
-fi
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
   v=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -1)
@@ -82,4 +77,16 @@ if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || echo "setup not
 else git -c credential.helper= -c "credential.helper=$helper" clone -q "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
 fi
-exec bash "$DEST/launcher/agent.sh" "$@"
+# the setup only: packages, Claude, Tailscale, the project; nothing is started here
+bash "$DEST/launcher/agent.sh" --no-start "$@"
+
+# ~/start.sh: the one command to start the session; it pulls the private part and starts it
+cat > "$HOME/start.sh.new" <<'WRAP'
+#!/usr/bin/env bash
+# start.sh (ai-tools start): pulls the setup and starts the project's session. Setup: install.sh.
+export PATH="$HOME/.local/bin:$PATH"
+git -C "$HOME/.ai-tools" pull --ff-only -q || echo "setup not updated (local changes or offline)"
+exec bash "$HOME/.ai-tools/launcher/start.sh" "$@"
+WRAP
+chmod +x "$HOME/start.sh.new" && mv "$HOME/start.sh.new" "$HOME/start.sh"
+echo "set up. Start the session with: ~/start.sh [PROJECT] [options]"
