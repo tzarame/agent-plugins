@@ -5,6 +5,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
 set -euo pipefail
+[ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/institor}; DEST="$HOME/.institor"
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
