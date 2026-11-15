@@ -5,7 +5,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
 set -euo pipefail
-PRIVATE=${AGENT_SETUP_REPO:-zog88/setup}; DEST="$HOME/.agent-setup"
+PRIVATE=${AGENT_SETUP_REPO:-zog88/institor}; DEST="$HOME/.institor"
 if ! command -v gh >/dev/null; then
   if command -v apt-get >/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y -qq curl git ca-certificates >/dev/null
