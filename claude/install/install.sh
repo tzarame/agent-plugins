@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # install.sh - the public first step of setting up a machine for a Claude Code agent.
-# It installs the GitHub CLI in ~/.local/bin (no sudo), logs in to GitHub (it prints a code and a link), then clones the
-# owner's private setup and runs it with the same options. Nothing private is in this file.
+# It installs the GitHub CLI in ~/.local/bin (no sudo), clones the owner's private setup and runs it
+# with the same options. Nothing private is in this file.
+# The clone signs in to the owner's GitHub App "institor-setup", which can only read the setup
+# repository: the script prints a code and a link; open the link, enter the code, allow the App.
+# The token can read only what both the App and the person may read, so only members with access
+# to the setup get it. The token stays on this machine only (~/.config/institor/git-credentials,
+# mode 600) for later pulls. Without a Client ID set, it logs in to GitHub instead (gh auth login).
 #
 #   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/institor}; DEST="$HOME/.institor"
+CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-}   # the Client ID of the App institor-setup; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
@@ -15,7 +21,37 @@ if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sud
   mkdir -p "$HOME/.local/bin"; mv "$t"/gh_*/bin/gh "$HOME/.local/bin/gh"; rm -rf "$t"
 fi
 command -v git >/dev/null || { echo "install.sh: git is missing; install it (it needs sudo) and run again" >&2; exit 1; }
-gh auth status >/dev/null 2>&1 || gh auth login --hostname github.com --git-protocol https --web < /dev/tty
-gh auth setup-git
-if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || true; else gh repo clone "$PRIVATE" "$DEST"; fi
+CONF="$HOME/.config/institor"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
+mkdir -p "$CONF"; chmod 700 "$CONF"
+helper="store --file=$CRED"   # the App's token, for this setup only
+can_read() { [ -s "$CRED" ] && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c "credential.helper=$helper" ls-remote "$URL" >/dev/null 2>&1; }
+field() { sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p"; }   # one field of a flat JSON answer
+if [ -z "$CLIENT_ID" ]; then
+  echo "No GitHub App is set for the setup (AGENT_SETUP_CLIENT_ID); logging in to GitHub instead."
+  gh auth status >/dev/null 2>&1 || gh auth login --hostname github.com --git-protocol https --web < /dev/tty
+  gh auth setup-git; helper=$(git config --global --get-all credential.https://github.com.helper | tail -1)
+elif ! can_read; then
+  # the device flow: a code to enter at a link, then the token
+  r=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID" https://github.com/login/device/code)
+  dev=$(printf '%s' "$r" | field device_code); every=$(printf '%s' "$r" | field interval)
+  echo "Open $(printf '%s' "$r" | field verification_uri) and enter the code $(printf '%s' "$r" | field user_code)"
+  echo "(sign in as a member of ${PRIVATE%/*} and allow the App). Waiting..."
+  tok=""
+  for _ in $(seq 180); do
+    sleep "${every:-5}"
+    a=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID&device_code=$dev&grant_type=urn:ietf:params:oauth:grant-type:device_code" https://github.com/login/oauth/access_token)
+    tok=$(printf '%s' "$a" | field access_token); [ -n "$tok" ] && break
+    case $(printf '%s' "$a" | field error) in
+      authorization_pending) ;; slow_down) every=$(( ${every:-5} + 5 )) ;;
+      *) echo "install.sh: sign-in failed: $(printf '%s' "$a" | field error)" >&2; exit 1 ;;
+    esac
+  done
+  [ -n "$tok" ] || { echo "install.sh: no sign-in in time; run again" >&2; exit 1; }
+  (umask 077; printf 'https://x-access-token:%s@github.com\n' "$tok" > "$CRED"); tok=""
+  can_read || { rm -f "$CRED"; echo "install.sh: that account cannot read $PRIVATE (is it a member with access, and is the App installed on it?)" >&2; exit 1; }
+fi
+if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || echo "setup not updated (local changes or offline)"
+else git -c credential.helper= -c "credential.helper=$helper" clone -q "$URL" "$DEST"
+  git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
+fi
 exec bash "$DEST/claude/install/agent.sh" "$@"
