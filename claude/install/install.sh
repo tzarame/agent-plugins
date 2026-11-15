@@ -9,7 +9,9 @@
 # It stays on this machine only (~/.config/ai-tools/git-credentials, mode 600). Without a Client ID
 # set, it logs in to GitHub instead (gh auth login).
 #
-#   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
+#   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
+#               less install.sh      # read what runs
+#               bash install.sh
 #   then:       ~/start.sh [PROJECT] [options]
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
