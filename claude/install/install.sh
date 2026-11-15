@@ -2,17 +2,17 @@
 # install.sh - the public first step of setting up a machine for a Claude Code agent.
 # It installs the GitHub CLI in ~/.local/bin (no sudo), clones the owner's private setup and runs it
 # with the same options. Nothing private is in this file.
-# The clone signs in to the owner's GitHub App "institor-setup", which can only read the setup
+# The clone signs in to the owner's GitHub App of the setup, which can only read the setup
 # repository: the script prints a code and a link; open the link, enter the code, allow the App.
 # The token can read only what both the App and the person may read, so only members with access
-# to the setup get it. The token stays on this machine only (~/.config/institor/git-credentials,
+# to the setup get it. The token stays on this machine only (~/.config/ai-tools/git-credentials,
 # mode 600) for later pulls. Without a Client ID set, it logs in to GitHub instead (gh auth login).
 #
 #   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
-PRIVATE=${AGENT_SETUP_REPO:-zog88/institor}; DEST="$HOME/.institor"
-CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-}   # the Client ID of the App institor-setup; not a secret
+PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
+CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-}   # the Client ID of the App of the setup; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
@@ -21,7 +21,7 @@ if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sud
   mkdir -p "$HOME/.local/bin"; mv "$t"/gh_*/bin/gh "$HOME/.local/bin/gh"; rm -rf "$t"
 fi
 command -v git >/dev/null || { echo "install.sh: git is missing; install it (it needs sudo) and run again" >&2; exit 1; }
-CONF="$HOME/.config/institor"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
+CONF="$HOME/.config/ai-tools"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
 mkdir -p "$CONF"; chmod 700 "$CONF"
 helper="store --file=$CRED"   # the App's token, for this setup only
 can_read() { [ -s "$CRED" ] && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c "credential.helper=$helper" ls-remote "$URL" >/dev/null 2>&1; }
@@ -54,4 +54,4 @@ if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || echo "setup not
 else git -c credential.helper= -c "credential.helper=$helper" clone -q "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
 fi
-exec bash "$DEST/claude/install/agent.sh" "$@"
+exec bash "$DEST/launcher/agent.sh" "$@"
