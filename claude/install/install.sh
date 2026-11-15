@@ -21,7 +21,26 @@ if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sud
   t=$(mktemp -d); curl -fsSL "https://github.com/cli/cli/releases/download/v$v/gh_${v}_linux_$arch.tar.gz" | tar -xz -C "$t"
   mkdir -p "$HOME/.local/bin"; mv "$t"/gh_*/bin/gh "$HOME/.local/bin/gh"; rm -rf "$t"
 fi
-command -v git >/dev/null || { echo "install.sh: git is missing; install it (it needs sudo) and run again" >&2; exit 1; }
+# git without root on Debian or Ubuntu: apt-get download fetches the packages as the user, dpkg -x
+# unpacks them under ~/.local/pkg, and a small ~/.local/bin/git tells git where its parts are
+if ! command -v git >/dev/null; then
+  command -v apt-get >/dev/null || { echo "install.sh: git is missing; install it and run again" >&2; exit 1; }
+  echo "git is missing; installing it in your home folder, without root"
+  pre="$HOME/.local/pkg"; t=$(mktemp -d); mkdir -p "$pre" "$HOME/.local/bin"
+  need=$(apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces --no-enhances git 2>/dev/null \
+    | grep '^[a-z0-9]' | sort -u | while read -r p; do dpkg -s "$p" >/dev/null 2>&1 || echo "$p"; done)
+  (cd "$t" && apt-get download -q $need) >/dev/null || { echo "install.sh: could not download git ($need)" >&2; rm -rf "$t"; exit 1; }
+  for d in "$t"/*.deb; do dpkg -x "$d" "$pre"; done; rm -rf "$t"
+  cat > "$HOME/.local/bin/git" <<SH
+#!/bin/sh
+p="$pre"
+export GIT_EXEC_PATH="\$p/usr/lib/git-core" GIT_TEMPLATE_DIR="\$p/usr/share/git-core/templates"
+export LD_LIBRARY_PATH="\$(echo "\$p"/usr/lib/*-linux-gnu | tr ' ' ':')\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+exec "\$p/usr/bin/git" "\$@"
+SH
+  chmod +x "$HOME/.local/bin/git"
+  git --version >/dev/null || { echo "install.sh: git does not start" >&2; exit 1; }
+fi
 CONF="$HOME/.config/ai-tools"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
 mkdir -p "$CONF"; chmod 700 "$CONF"
 helper="store --file=$CRED"   # the App's token, for this setup only
