@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# install.sh - the public first step of setting up a machine for a Claude Code agent.
-# It installs the GitHub CLI in ~/.local/bin (no sudo), clones the owner's private setup and runs it
-# with the same options. Nothing private is in this file.
-# The clone signs in to the agents' GitHub App, the one App for the setup and the projects: the
-# script prints a code and a link; open the link, enter the code, allow the App. The token reaches
-# only the repositories the App is installed on, and no more than the person may do there. It stays
-# on this machine only (~/.config/ai-tools/git-credentials, mode 600): later pulls use it, and the
-# setup gives it to gh for the agent's work, so one code is enough. Without a Client ID set, it logs
-# in to GitHub instead (gh auth login).
+# install.sh - the one script the user runs; saved as ~/start.sh on the first run (ai-tools bootstrap).
+# It never changes on the machine. Each run: git and the GitHub CLI if missing (no root), the
+# sign-in to the agents' GitHub App if not done, then the latest private part (zog88/ai-tools,
+# pulled to ~/.ai-tools), which it runs with the same options: packages, Claude, Tailscale, the
+# project and its session. Nothing private is in this file.
+# The sign-in prints a code and a link; open the link, enter the code, allow the App. The token
+# reaches only the repositories the App is installed on, and no more than the person may do there.
+# It stays on this machine only (~/.config/ai-tools/git-credentials, mode 600). Without a Client ID
+# set, it logs in to GitHub instead (gh auth login).
 #
-#   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
+#   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh | bash
+#   then:       ~/start.sh [PROJECT] [options]
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
 CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
+SELF_URL=https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh
+# the first run: keep this script as ~/start.sh, the only file the user runs from now on
+if ! grep -q '(ai-tools bootstrap)' "$HOME/start.sh" 2>/dev/null; then
+  curl -fsSL "$SELF_URL" -o "$HOME/start.sh.new" && chmod +x "$HOME/start.sh.new" && mv "$HOME/start.sh.new" "$HOME/start.sh" && echo "saved as ~/start.sh: run it from now on"
+fi
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
   arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
   v=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -1)
