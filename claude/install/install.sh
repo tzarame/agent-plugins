@@ -14,7 +14,13 @@
 #   then:       ~/start.sh [PROJECT] [options]     sets up what is missing, then starts the session
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
-PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}; DEST="$HOME/.ai-tools"
+PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}
+# the branch of the private part: main goes to ~/.ai-tools and ~/start.sh; another branch (install-dev.sh
+# gives dev) goes to its own folder and its own command, so the main copy is not touched
+BRANCH=${AGENT_SETUP_BRANCH:-main}
+[[ $BRANCH =~ ^[A-Za-z0-9._-]+$ ]] || { echo "install.sh: the branch name has characters not allowed: $BRANCH" >&2; exit 1; }
+if [ "$BRANCH" = main ]; then SUF=""; else SUF="-$BRANCH"; fi
+DEST="$HOME/.ai-tools$SUF"; START="$HOME/start$SUF.sh"
 CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
@@ -73,18 +79,18 @@ elif ! can_read; then
   can_read || { rm -f "$CRED"; echo "install.sh: that account cannot read $PRIVATE (is it a member with access, and is the App installed on it?)" >&2; exit 1; }
 fi
 if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || echo "setup not updated (local changes or offline)"
-else git -c credential.helper= -c "credential.helper=$helper" clone -q "$URL" "$DEST"
+else git -c credential.helper= -c "credential.helper=$helper" clone -q -b "$BRANCH" "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
 fi
 # ~/start.sh: the one command. It pulls the private part, sets up what is missing, and starts the session.
-cat > "$HOME/start.sh.new" <<'WRAP'
+sed "s#@DEST@#\$HOME/.ai-tools$SUF#g" > "$START.new" <<'WRAP'
 #!/usr/bin/env bash
 # start.sh (ai-tools start): pulls the setup, then runs it (agent.sh), which starts the project's session.
 export PATH="$HOME/.local/bin:$PATH"
-git -C "$HOME/.ai-tools" pull --ff-only -q || echo "setup not updated (local changes or offline)"
-exec bash "$HOME/.ai-tools/launcher/agent.sh" "$@"
+git -C "@DEST@" pull --ff-only -q || echo "setup not updated (local changes or offline)"
+exec bash "@DEST@/launcher/agent.sh" "$@"
 WRAP
-chmod +x "$HOME/start.sh.new"
+chmod +x "$START.new"
 # rewrite only when the content changed
-if cmp -s "$HOME/start.sh.new" "$HOME/start.sh" 2>/dev/null; then rm -f "$HOME/start.sh.new"; else mv "$HOME/start.sh.new" "$HOME/start.sh"; fi
-echo "GitHub is set up. Start the session with: ~/start.sh [PROJECT] [options]"
+if cmp -s "$START.new" "$START" 2>/dev/null; then rm -f "$START.new"; else mv "$START.new" "$START"; fi
+echo "GitHub is set up. Start the session with: ~/start$SUF.sh [PROJECT] [options]"
