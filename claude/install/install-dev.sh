@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# install-dev.sh - install.sh --dev: the dev copy of the private part, in ~/.ai-tools-dev with the command
-# ~/start-dev.sh; it runs the latest pre-release vX.Y.Z-rc.N. ~/.ai-tools and ~/start.sh are not touched.
+# install-dev.sh - install.sh --dev: the dev copy of the private part, in ~/.agent-kit-dev with the command
+# ~/start-dev.sh; it runs the latest pre-release vX.Y.Z-rc.N. ~/.agent-kit and ~/start.sh are not touched.
 # It runs the install.sh beside it, or downloads it when it is alone.
 #
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install-dev.sh -o install-dev.sh
