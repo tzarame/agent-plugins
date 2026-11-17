@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# install-dev.sh - the same setup as install.sh, for the dev branch of the private part: it goes to
-# ~/.ai-tools-dev and the command is ~/start-dev.sh. ~/.ai-tools and ~/start.sh (main) are not touched.
+# install-dev.sh - install.sh --dev: the dev copy of the private part, in ~/.ai-tools-dev with the command
+# ~/start-dev.sh; it runs the latest pre-release vX.Y.Z-rc.N. ~/.ai-tools and ~/start.sh are not touched.
 # It runs the install.sh beside it, or downloads it when it is alone.
 #
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install-dev.sh -o install-dev.sh
@@ -13,4 +13,4 @@ if [ ! -f "$main" ]; then
   main=$(mktemp); trap 'rm -f "$main"' EXIT
   curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o "$main"
 fi
-AGENT_SETUP_BRANCH=dev bash "$main"
+bash "$main" --dev
