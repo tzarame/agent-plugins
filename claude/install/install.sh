@@ -78,11 +78,11 @@ elif ! can_read; then
   (umask 077; printf 'https://x-access-token:%s@github.com\n' "$tok" > "$CRED"); tok=""
   can_read || { rm -f "$CRED"; echo "install.sh: that account cannot read $PRIVATE (is it a member with access, and is the App installed on it?)" >&2; exit 1; }
 fi
-if [ -d "$DEST/.git" ]; then git -C "$DEST" pull --ff-only -q || echo "setup not updated (local changes or offline)"
-else git -c credential.helper= -c "credential.helper=$helper" clone -q -b "$BRANCH" "$URL" "$DEST"
+# an existing copy is updated by the launcher at each start (launcher/start.sh), so only a new copy is cloned here
+if [ ! -d "$DEST/.git" ]; then git -c credential.helper= -c "credential.helper=$helper" clone -q -b "$BRANCH" "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
 fi
-# ~/start.sh: the one command. It pulls the private part, sets up what is missing, and starts the session.
+# ~/start.sh: the one command. The launcher updates the private part, sets up what is missing, and starts the session.
 sed "s#@DEST@#\$HOME/.ai-tools$SUF#g" > "$START.new" <<'WRAP'
 #!/usr/bin/env bash
 # start.sh (ai-tools start): runs agent.sh, which hands over to the launcher's start.sh: it updates the launcher and starts the project's session.
