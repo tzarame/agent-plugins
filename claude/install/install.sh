@@ -11,15 +11,21 @@
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
 #               less install.sh      # read what runs
 #               bash install.sh
+#               bash install.sh --dev   # the dev copy instead: ~/.ai-tools-dev and ~/start-dev.sh, on pre-releases
 #   then:       ~/start.sh [PROJECT] [options]     sets up what is missing, then starts the session
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}
-# the branch of the private part: main goes to ~/.ai-tools and ~/start.sh; another branch (install-dev.sh
-# gives dev) goes to its own folder and its own command, so the main copy is not touched
-BRANCH=${AGENT_SETUP_BRANCH:-main}
-[[ $BRANCH =~ ^[A-Za-z0-9._-]+$ ]] || { echo "install.sh: the branch name has characters not allowed: $BRANCH" >&2; exit 1; }
-if [ "$BRANCH" = main ]; then SUF=""; else SUF="-$BRANCH"; fi
+# the channel of the private part (its README, "The stable and the dev copy"): stable goes to ~/.ai-tools and
+# ~/start.sh and runs the latest release vX.Y.Z; --dev goes to ~/.ai-tools-dev and ~/start-dev.sh and runs the
+# latest pre-release vX.Y.Z-rc.N. Both are clones of main; the launcher moves them to their tag at each start.
+CHANNEL=stable
+case "${1:-}" in
+  --dev) CHANNEL=dev ;;
+  "") ;;
+  *) echo "install.sh: unknown option $1 (the only one is --dev)" >&2; exit 2 ;;
+esac
+if [ "$CHANNEL" = dev ]; then SUF="-dev"; else SUF=""; fi
 DEST="$HOME/.ai-tools$SUF"; START="$HOME/start$SUF.sh"
 CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
@@ -79,8 +85,13 @@ elif ! can_read; then
   can_read || { rm -f "$CRED"; echo "install.sh: that account cannot read $PRIVATE (is it a member with access, and is the App installed on it?)" >&2; exit 1; }
 fi
 # an existing copy is updated by the launcher at each start (launcher/start.sh), so only a new copy is cloned here
-if [ ! -d "$DEST/.git" ]; then git -c credential.helper= -c "credential.helper=$helper" clone -q -b "$BRANCH" "$URL" "$DEST"
+if [ ! -d "$DEST/.git" ]; then git -c credential.helper= -c "credential.helper=$helper" clone -q -b main "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
+fi
+if [ "$CHANNEL" = dev ]; then git -C "$DEST" config ai-tools.channel dev; else git -C "$DEST" config --unset ai-tools.channel 2>/dev/null || true; fi
+br=$(git -C "$DEST" symbolic-ref --short -q HEAD 2>/dev/null || true)
+if [ -n "$br" ] && [ "$br" != main ]; then   # a copy on another branch is not moved by the launcher
+  echo "$DEST is on the branch $br, so it is not updated. To follow the $CHANNEL channel: git -C $DEST switch main"
 fi
 # ~/start.sh: the one command. The launcher updates the private part, sets up what is missing, and starts the session.
 sed "s#@DEST@#\$HOME/.ai-tools$SUF#g" > "$START.new" <<'WRAP'
