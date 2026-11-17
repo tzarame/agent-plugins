@@ -85,9 +85,8 @@ fi
 # ~/start.sh: the one command. It pulls the private part, sets up what is missing, and starts the session.
 sed "s#@DEST@#\$HOME/.ai-tools$SUF#g" > "$START.new" <<'WRAP'
 #!/usr/bin/env bash
-# start.sh (ai-tools start): pulls the setup, then runs it (agent.sh), which starts the project's session.
+# start.sh (ai-tools start): runs agent.sh, which hands over to the launcher's start.sh: it updates the launcher and starts the project's session.
 export PATH="$HOME/.local/bin:$PATH"
-git -C "@DEST@" pull --ff-only -q || echo "setup not updated (local changes or offline)"
 exec bash "@DEST@/launcher/agent.sh" "$@"
 WRAP
 chmod +x "$START.new"
