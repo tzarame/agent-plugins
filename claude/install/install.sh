@@ -8,9 +8,9 @@
 # It stays on this machine only (~/.config/agent-kit/git-credentials, mode 600). Without a Client ID
 # set, it logs in to GitHub instead (gh auth login).
 # It first tries to read the private part with what is on the machine: the App's key
-# (~/.config/agent-kit/app-key.pem), then the token of a sign-in before. With neither it asks: paste the App's key
-# (the agent then acts as the App itself, and your own gh login on this machine is signed out), or sign in
-# yourself with a code (for your personal projects only).
+# (~/.config/agent-kit/app-key.pem), then the token of a sign-in before, then your own gh login. With none it asks:
+# paste the App's key (the agent then acts as the App itself), or sign in yourself with a code (for your personal
+# projects only). A login of yours that is there is not changed.
 #
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
 #               less install.sh      # read what runs
@@ -102,12 +102,13 @@ if [ -z "$CLIENT_ID" ]; then
   gh auth setup-git; ok "signed in to GitHub"; helper=$(git config --global --get-all credential.https://github.com.helper | tail -1)
 elif can_read_app; then APPMODE=1; ok "signed in as the App itself (its key is on this machine): $PRIVATE can be read"
 elif can_read; then ok "signed in already: $PRIVATE can be read"
+elif gh auth status --hostname github.com >/dev/null 2>&1 && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' ls-remote "$URL" >/dev/null 2>&1; then
+  helper='!gh auth git-credential'; ok "signed in already with gh: $PRIVATE can be read"
 else
   way=2
   if (: < /dev/tty) 2>/dev/null; then
     info "$PRIVATE cannot be read from this machine yet. Two ways:"
     info "  ${C_B}1$C_0  paste the key of the agents' GitHub App: the agent acts as the App itself."
-    info "     Your own GitHub login on this machine (gh auth) is signed out."
     info "  ${C_B}2$C_0  sign in yourself, with a code: for your personal projects only"
     way=""; while [ "$way" != 1 ] && [ "$way" != 2 ]; do printf '  1 or 2: '; read -r way < /dev/tty || die "no answer; run again"; done
   fi
@@ -121,10 +122,7 @@ if [ -n "$CLIENT_ID" ] && [ "$APPMODE" = 0 ] && [ "${way:-}" = 1 ]; then
   openssl pkey -in "$KEY.new" -noout 2>/dev/null || die "that is not a private key; nothing changed"
   can_read_app "$KEY.new" || die "GitHub did not take the key for $PRIVATE (is it this App's key, and is the App installed there?); nothing changed"
   mv "$KEY.new" "$KEY"; trap - EXIT
-  # the person's own login goes: the agent is the App only
-  while gh auth status --hostname github.com >/dev/null 2>&1; do gh auth logout --hostname github.com < /dev/null >/dev/null 2>&1 || break; done
-  rm -f "$CRED"
-  APPMODE=1; ok "the key is in ${KEY/#$HOME/\~}; signed out of gh; $PRIVATE can be read as the App"
+  APPMODE=1; ok "the key is in ${KEY/#$HOME/\~}: $PRIVATE can be read as the App"
 elif [ -n "$CLIENT_ID" ] && [ "${way:-}" = 2 ]; then
   # the device flow: a code to enter at a link, then the token
   r=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID" https://github.com/login/device/code)
