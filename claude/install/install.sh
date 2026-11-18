@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # install.sh - the GitHub part only: git and the GitHub CLI if missing (no root), the sign-in to the
-# agents' GitHub App if not done, the private part (zog88/ai-tools, in ~/.ai-tools), and ~/start.sh.
+# agents' GitHub App if not done, the private part (zog88/agent-kit, in ~/.agent-kit), and ~/start.sh.
 # Packages, Claude, Tailscale and the project are set up by ~/start.sh (launcher/agent.sh), not here.
 # Nothing private is in this file.
 # The sign-in prints a code and a link; open the link, enter the code, allow the App. The token
 # reaches only the repositories the App is installed on, and no more than the person may do there.
-# It stays on this machine only (~/.config/ai-tools/git-credentials, mode 600). Without a Client ID
+# It stays on this machine only (~/.config/agent-kit/git-credentials, mode 600). Without a Client ID
 # set, it logs in to GitHub instead (gh auth login).
 #
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
 #               less install.sh      # read what runs
 #               bash install.sh
-#               bash install.sh --dev   # the dev copy instead: ~/.ai-tools-dev and ~/start-dev.sh, on pre-releases
+#               bash install.sh --dev   # the dev copy instead: ~/.agent-kit-dev and ~/start-dev.sh, on pre-releases
 #   then:       ~/start.sh [PROJECT] [options]     sets up what is missing, then starts the session
 set -euo pipefail
 [ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
-PRIVATE=${AGENT_SETUP_REPO:-zog88/ai-tools}
-# the channel of the private part (its README, "The stable and the dev copy"): stable goes to ~/.ai-tools and
-# ~/start.sh and runs the latest release vX.Y.Z; --dev goes to ~/.ai-tools-dev and ~/start-dev.sh and runs the
+PRIVATE=${AGENT_SETUP_REPO:-zog88/agent-kit}
+# the channel of the private part (its README, "The stable and the dev copy"): stable goes to ~/.agent-kit and
+# ~/start.sh and runs the latest release vX.Y.Z; --dev goes to ~/.agent-kit-dev and ~/start-dev.sh and runs the
 # latest pre-release vX.Y.Z-rc.N. Both are clones of main; the launcher moves them to their tag at each start.
 CHANNEL=stable
 case "${1:-}" in
@@ -26,7 +26,7 @@ case "${1:-}" in
   *) echo "install.sh: unknown option $1 (the only one is --dev)" >&2; exit 2 ;;
 esac
 if [ "$CHANNEL" = dev ]; then SUF="-dev"; else SUF=""; fi
-DEST="$HOME/.ai-tools$SUF"; START="$HOME/start$SUF.sh"
+DEST="$HOME/.agent-kit$SUF"; START="$HOME/start$SUF.sh"
 CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of the agents' GitHub App; not a secret
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
@@ -55,7 +55,7 @@ SH
   chmod +x "$HOME/.local/bin/git"
   git --version >/dev/null || { echo "install.sh: git does not start" >&2; exit 1; }
 fi
-CONF="$HOME/.config/ai-tools"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
+CONF="$HOME/.config/agent-kit"; CRED="$CONF/git-credentials"; URL="https://github.com/$PRIVATE.git"
 mkdir -p "$CONF"; chmod 700 "$CONF"
 helper="store --file=$CRED"   # the App's token, for this setup only
 can_read() { [ -s "$CRED" ] && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c "credential.helper=$helper" ls-remote "$URL" >/dev/null 2>&1; }
@@ -88,15 +88,15 @@ fi
 if [ ! -d "$DEST/.git" ]; then git -c credential.helper= -c "credential.helper=$helper" clone -q -b main "$URL" "$DEST"
   git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
 fi
-if [ "$CHANNEL" = dev ]; then git -C "$DEST" config ai-tools.channel dev; else git -C "$DEST" config --unset ai-tools.channel 2>/dev/null || true; fi
+if [ "$CHANNEL" = dev ]; then git -C "$DEST" config agent-kit.channel dev; else git -C "$DEST" config --unset agent-kit.channel 2>/dev/null || true; fi
 br=$(git -C "$DEST" symbolic-ref --short -q HEAD 2>/dev/null || true)
 if [ -n "$br" ] && [ "$br" != main ]; then   # a copy on another branch is not moved by the launcher
   echo "$DEST is on the branch $br, so it is not updated. To follow the $CHANNEL channel: git -C $DEST switch main"
 fi
 # ~/start.sh: the one command. The launcher updates the private part, sets up what is missing, and starts the session.
-sed "s#@DEST@#\$HOME/.ai-tools$SUF#g" > "$START.new" <<'WRAP'
+sed "s#@DEST@#\$HOME/.agent-kit$SUF#g" > "$START.new" <<'WRAP'
 #!/usr/bin/env bash
-# start.sh (ai-tools start): runs agent.sh, which hands over to the launcher's start.sh: it updates the launcher and starts the project's session.
+# start.sh (agent-kit start): runs agent.sh, which hands over to the launcher's start.sh: it updates the launcher and starts the project's session.
 export PATH="$HOME/.local/bin:$PATH"
 exec bash "@DEST@/launcher/agent.sh" "$@"
 WRAP
