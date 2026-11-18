@@ -14,7 +14,6 @@
 #               bash install.sh --dev   # the dev copy instead: ~/.agent-kit-dev and ~/start-dev.sh, on pre-releases
 #   then:       ~/start.sh [PROJECT] [options]     sets up what is missing, then starts the session
 set -euo pipefail
-[ "$(id -u)" = 0 ] && { echo "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages." >&2; exit 1; }
 PRIVATE=${AGENT_SETUP_REPO:-zog88/agent-kit}
 # the lines of the log, as the launcher writes them: a heading, then its steps under it (done, not done, a plain line).
 # Colours only on a terminal (NO_COLOR turns them off)
@@ -23,6 +22,7 @@ say() { printf '\n%s== %s%s\n' "$C_B" "$*" "$C_0"; }
 ok() { printf '  %s✓%s %s\n' "$C_OK" "$C_0" "$*"; }
 info() { printf '  %s\n' "$*"; }
 die() { printf '  %s✗%s %s\n' "$C_NO" "$C_0" "$*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] && die "Run this as your normal user, not with sudo or as root: the agent, its logins and its files belong to that user. It asks for sudo itself, only for missing packages."
 # the channel of the private part (its README, "The stable and the dev copy"): stable goes to ~/.agent-kit and
 # ~/start.sh and runs the latest release vX.Y.Z; --dev goes to ~/.agent-kit-dev and ~/start-dev.sh and runs the
 # latest pre-release vX.Y.Z-rc.N. Both are clones of main; the launcher moves them to their tag at each start.
@@ -30,7 +30,7 @@ CHANNEL=stable
 case "${1:-}" in
   --dev) CHANNEL=dev ;;
   "") ;;
-  *) echo "install.sh: unknown option $1 (the only one is --dev)" >&2; exit 2 ;;
+  *) die "unknown option $1 (the only one is --dev)" ;;
 esac
 if [ "$CHANNEL" = dev ]; then SUF="-dev"; else SUF=""; fi
 DEST="$HOME/.agent-kit$SUF"; START="$HOME/start$SUF.sh"
@@ -38,8 +38,9 @@ CLIENT_ID=${AGENT_SETUP_CLIENT_ID:-Iv23lijFlkviWDqdzKMP}   # the Client ID of th
 export PATH="$HOME/.local/bin:$PATH"
 say "GitHub"
 if ! command -v gh >/dev/null; then   # the GitHub CLI as a user program, no sudo
-  arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; esac
-  v=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -1)
+  arch=$(uname -m); case $arch in x86_64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; *) die "no GitHub CLI is built for $arch; install gh yourself and run again" ;; esac
+  v=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -1) || v=""
+  [ -n "$v" ] || die "could not learn the latest version of the GitHub CLI (no network, or GitHub's limit of requests); run again later, or install gh yourself"
   t=$(mktemp -d); curl -fsSL "https://github.com/cli/cli/releases/download/v$v/gh_${v}_linux_$arch.tar.gz" | tar -xz -C "$t"
   mkdir -p "$HOME/.local/bin"; mv "$t"/gh_*/bin/gh "$HOME/.local/bin/gh"; rm -rf "$t"
   ok "GitHub CLI $v installed in ~/.local/bin"
@@ -85,7 +86,7 @@ elif ! can_read; then
   tok=""
   for _ in $(seq 180); do
     sleep "${every:-5}"
-    a=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID&device_code=$dev&grant_type=urn:ietf:params:oauth:grant-type:device_code" https://github.com/login/oauth/access_token)
+    a=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID&device_code=$dev&grant_type=urn:ietf:params:oauth:grant-type:device_code" https://github.com/login/oauth/access_token) || continue   # the network dropped for a moment: ask again
     tok=$(printf '%s' "$a" | field access_token); [ -n "$tok" ] && break
     case $(printf '%s' "$a" | field error) in
       authorization_pending) ;; slow_down) every=$(( ${every:-5} + 5 )) ;;
