@@ -156,7 +156,7 @@ else ok "the $CHANNEL copy is in ${DEST/#$HOME/\~} (updated at each start)"
 fi
 if [ "$APPMODE" = 1 ]; then   # later pulls with the App's tokens, from the kit's own helper (launcher/gh-app.sh)
   if [ -f "$DEST/launcher/gh-app.sh" ]; then
-    git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "!bash $(printf '%q' "$DEST/launcher/gh-app.sh") git-credential"
+    git -C "$DEST" config --replace-all credential.helper ""; git -C "$DEST" config --add credential.helper "!bash $(printf '%q' "$DEST/launcher/gh-app.sh") git-credential"
     git -C "$DEST" config credential.useHttpPath true
   else info "this copy is older than the App's login (no launcher/gh-app.sh): it is not updated until it is cloned again"
   fi
