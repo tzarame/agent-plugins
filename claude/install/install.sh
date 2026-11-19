@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # install.sh - the GitHub part only: git and the GitHub CLI if missing (no root), the sign-in to the
-# agents' GitHub App if not done, the private part (zog88/agent-kit, in ~/.agent-kit), and ~/start.sh.
+# agents' GitHub App if not done (or the App's own key), the private part (zog88/agent-kit, in ~/.agent-kit), and ~/start.sh.
 # Packages, Claude, Tailscale and the project are set up by ~/start.sh (launcher/agent.sh), not here.
 # Nothing private is in this file.
 # The sign-in prints a code and a link; open the link, enter the code, allow the App. The token
 # reaches only the repositories the App is installed on, and no more than the person may do there.
 # It stays on this machine only (~/.config/agent-kit/git-credentials, mode 600). Without a Client ID
 # set, it logs in to GitHub instead (gh auth login).
+# It first tries to read the private part with what is on the machine: the App's key
+# (~/.config/agent-kit/app-key.pem), then the token of a sign-in before, then your own gh login. With none it asks:
+# paste the App's key (the agent then acts as the App itself), or sign in yourself with a code (for your personal
+# projects only). A login of yours that is there is not changed.
 #
 #   first run:  curl -fsSL https://raw.githubusercontent.com/tzarame/agent-plugins/main/claude/install/install.sh -o install.sh
 #               less install.sh      # read what runs
@@ -70,12 +74,56 @@ CONF="$HOME/.config/agent-kit"; CRED="$CONF/git-credentials"; URL="https://githu
 mkdir -p "$CONF"; chmod 700 "$CONF"
 helper="store --file=$CRED"   # the App's token, for this setup only
 can_read() { [ -s "$CRED" ] && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c "credential.helper=$helper" ls-remote "$URL" >/dev/null 2>&1; }
+KEY="$CONF/app-key.pem"
+# the App itself: a token of its installation on the private part's account (one hour), from the key $1.
+# The App's pass goes to curl on its input, not in its arguments
+b64() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+app_token() {
+  local now h p s j id; now=$(date +%s)
+  h=$(printf '{"alg":"RS256","typ":"JWT"}' | b64)
+  p=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$CLIENT_ID" | b64)
+  s=$(printf '%s.%s' "$h" "$p" | openssl dgst -sha256 -sign "$1" -binary 2>/dev/null | b64); j="$h.$p.$s"
+  id=$(printf 'Authorization: Bearer %s\n' "$j" | curl -fsS -H @- -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$PRIVATE/installation" 2>/dev/null | field id | head -1)
+  [ -n "$id" ] || return 1
+  printf 'Authorization: Bearer %s\n' "$j" | curl -fsS -X POST -H @- -H "Accept: application/vnd.github+json" "https://api.github.com/app/installations/$id/access_tokens" 2>/dev/null | field token | head -1
+}
+helper_app='!f() { echo username=x-access-token; echo "password=$APP_TOK"; }; f'   # the token stays in the environment
+APPMODE=0
+can_read_app() {
+  [ -s "${1:-$KEY}" ] && command -v openssl >/dev/null || return 1
+  APP_TOK=$(app_token "${1:-$KEY}") && [ -n "$APP_TOK" ] || return 1
+  export APP_TOK
+  GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c "credential.helper=$helper_app" ls-remote "$URL" >/dev/null 2>&1
+}
 field() { sed -n "s/.*\"$1\": *\"\{0,1\}\([^\",}]*\).*/\1/p"; }   # one field of a flat JSON answer
 if [ -z "$CLIENT_ID" ]; then
   info "No GitHub App is set for the setup (AGENT_SETUP_CLIENT_ID); logging in to GitHub instead."
   gh auth status >/dev/null 2>&1 || gh auth login --hostname github.com --git-protocol https --web < /dev/tty
   gh auth setup-git; ok "signed in to GitHub"; helper=$(git config --global --get-all credential.https://github.com.helper | tail -1)
-elif ! can_read; then
+elif can_read_app; then APPMODE=1; ok "signed in as the App itself (its key is on this machine): $PRIVATE can be read"
+elif can_read; then ok "signed in already: $PRIVATE can be read"
+elif gh auth status --hostname github.com >/dev/null 2>&1 && GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' ls-remote "$URL" >/dev/null 2>&1; then
+  helper='!gh auth git-credential'; ok "signed in already with gh: $PRIVATE can be read"
+else
+  way=2
+  if (: < /dev/tty) 2>/dev/null; then
+    info "$PRIVATE cannot be read from this machine yet. Two ways:"
+    info "  ${C_B}1$C_0  paste the key of the agents' GitHub App: the agent acts as the App itself."
+    info "  ${C_B}2$C_0  sign in yourself, with a code: for your personal projects only"
+    way=""; while [ "$way" != 1 ] && [ "$way" != 2 ]; do printf '  1 or 2: '; read -r way < /dev/tty || die "no answer; run again"; done
+  fi
+fi
+if [ -n "$CLIENT_ID" ] && [ "$APPMODE" = 0 ] && [ "${way:-}" = 1 ]; then
+  command -v openssl >/dev/null || die "openssl is missing; install it and run again"
+  info "Paste the App's private key (the .pem file's text), then press Enter and Ctrl-D. It is not shown."
+  trap 'stty echo < /dev/tty 2>/dev/null || true; rm -f "$KEY.new"' EXIT
+  stty -echo < /dev/tty; k=$(cat < /dev/tty); stty echo < /dev/tty
+  (umask 077; printf '%s\n' "$k" > "$KEY.new"); k=""
+  openssl pkey -in "$KEY.new" -noout 2>/dev/null || die "that is not a private key; nothing changed"
+  can_read_app "$KEY.new" || die "GitHub did not take the key for $PRIVATE (is it this App's key, and is the App installed there?); nothing changed"
+  mv "$KEY.new" "$KEY"; trap - EXIT
+  APPMODE=1; ok "the key is in ${KEY/#$HOME/\~}: $PRIVATE can be read as the App"
+elif [ -n "$CLIENT_ID" ] && [ "${way:-}" = 2 ]; then
   # the device flow: a code to enter at a link, then the token
   r=$(curl -fsS -X POST -H "Accept: application/json" -d "client_id=$CLIENT_ID" https://github.com/login/device/code)
   dev=$(printf '%s' "$r" | field device_code); every=$(printf '%s' "$r" | field interval)
@@ -97,14 +145,21 @@ elif ! can_read; then
   (umask 077; printf 'https://x-access-token:%s@github.com\n' "$tok" > "$CRED"); tok=""
   can_read || { rm -f "$CRED"; die "that account cannot read $PRIVATE (is it a member with access, and is the App installed on it?)"; }
   ok "signed in: $PRIVATE can be read"
-else ok "signed in already: $PRIVATE can be read"
 fi
+[ "$APPMODE" = 0 ] || helper=$helper_app
 say "agent-kit"
 # an existing copy is updated by the launcher at each start (launcher/start.sh), so only a new copy is cloned here
 if [ ! -d "$DEST/.git" ]; then git -c credential.helper= -c "credential.helper=$helper" clone -q -b main "$URL" "$DEST"
   ok "the $CHANNEL copy cloned to ${DEST/#$HOME/\~}"
-  git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"   # later pulls the same way
+  [ "$APPMODE" = 1 ] || { git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "$helper"; }   # later pulls the same way
 else ok "the $CHANNEL copy is in ${DEST/#$HOME/\~} (updated at each start)"
+fi
+if [ "$APPMODE" = 1 ]; then   # later pulls with the App's tokens, from the kit's own helper (launcher/gh-app.sh)
+  if [ -f "$DEST/launcher/gh-app.sh" ]; then
+    git -C "$DEST" config credential.helper ""; git -C "$DEST" config --add credential.helper "!bash $(printf '%q' "$DEST/launcher/gh-app.sh") git-credential"
+    git -C "$DEST" config credential.useHttpPath true
+  else info "this copy is older than the App's login (no launcher/gh-app.sh): it is not updated until it is cloned again"
+  fi
 fi
 if [ "$CHANNEL" = dev ]; then git -C "$DEST" config agent-kit.channel dev; else git -C "$DEST" config --unset agent-kit.channel 2>/dev/null || true; fi
 br=$(git -C "$DEST" symbolic-ref --short -q HEAD 2>/dev/null || true)
